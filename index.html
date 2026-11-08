@@ -85,14 +85,15 @@
   .toolbar .btn { backdrop-filter: blur(6px); }
   .legend { position: absolute; right: 12px; bottom: 10px; font-size: 12px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.5); opacity: .85; pointer-events: none; }
   /* phones: the view fills the screen; the panel is a sheet that slides up from the bottom */
-  .sheet-head, .mtop { display: none; }
+  .sheet-head, .mtop, .mbar { display: none; }
   @media (max-width: 760px) {
     .app { display: block; height: 100dvh; }
     main { position: fixed; inset: 0; }
-    aside { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; max-height: 74dvh; border-right: 0; border-top: 1px solid var(--line);
+    aside { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; max-height: 62dvh; border-right: 0; border-top: 1px solid var(--line);
             border-radius: 16px 16px 0 0; box-shadow: 0 -10px 28px rgba(0,0,0,.18); padding-top: 0;
             padding-bottom: max(14px, env(safe-area-inset-bottom)); overscroll-behavior: contain;
-            transform: translateY(calc(100% - 66px - env(safe-area-inset-bottom, 0px))); transition: transform .22s ease; }
+            transform: translateY(calc(100% + 24px)); transition: transform .22s ease; }   /* hidden until you ask for it */
+    .item .body { display: none; }                      /* editing happens in the bottom bar on phones */
     aside.open { transform: none; }
     aside > h1, aside > .by, aside > .sub { display: none; }
     .mtop .brand { flex: 1; min-width: 0; text-align: center; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.45); line-height: 1.15; pointer-events: none; }
@@ -112,6 +113,40 @@
     .item .icon { width: 40px; height: 40px; }
     .sw { width: 26px; height: 26px; }
     select, input[type=number] { font-size: 16px; min-height: 36px; }   /* 16px stops iOS zooming in on focus */
+    /* the bottom bar: browse, add, or edit the selected box, without covering the view */
+    .mbar { display: block; position: fixed; z-index: 6; left: 8px; right: 8px; bottom: max(8px, env(safe-area-inset-bottom));
+            background: color-mix(in srgb, var(--panel) 94%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 8px 28px rgba(0,0,0,.22); padding: 10px; }
+    .mbar > div { display: none; }
+    .mbar[data-mode="idle"] .mb-idle { display: flex; gap: 8px; }
+    .mbar[data-mode="idle"] .mb-idle .btn { flex: 1; min-height: 44px; font-size: 15px; }
+    .mbar[data-mode="add"] .mb-add, .mbar[data-mode="edit"] .mb-edit { display: block; }
+    .mb-hint { font-size: 13.5px; color: var(--fg); margin: 2px 4px 8px; }
+    .mb-row { display: flex; gap: 8px; align-items: center; }
+    .mb-row .chips { flex: 1; min-width: 0; }
+    .mb-head { display: flex; align-items: center; gap: 2px; }
+    .mb-head .dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(0,0,0,.22); flex: none; margin: 0 8px 0 2px; }
+    .mb-name { flex: 1; min-width: 0; }
+    .mb-name b { display: block; font: 600 14.5px var(--font-display); }
+    .mb-name span { display: block; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mbar .icon { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; }
+    .tabs { display: flex; gap: 2px; margin: 6px 0 8px; overflow-x: auto; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar, .chips::-webkit-scrollbar { display: none; }
+    .tab { flex: none; border: 0; background: none; color: var(--muted); font: 600 13px var(--font-display); padding: 8px 11px; border-radius: 9px; }
+    .tab[aria-pressed="true"] { background: var(--chip); color: var(--fg); }
+    .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; align-items: center; padding: 2px 0; }
+    .chip { flex: none; border: 1px solid var(--line); background: var(--chip); color: var(--fg); border-radius: 999px; padding: 0 15px;
+            min-height: 40px; font: 500 14px var(--font-body); cursor: pointer; }
+    .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+    .mbar .sw { width: 34px; height: 34px; flex: none; }
+    .mbar input[type=range] { flex: 1; min-width: 150px; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .step { display: grid; grid-template-columns: 40px 1fr 40px; align-items: center; text-align: center; row-gap: 3px; }
+    .step .small { grid-column: 1 / -1; }
+    .step .v { font: 600 15px var(--font-display); }
+    .step .chip { padding: 0; width: 40px; font-size: 18px; }
+    .mbar .file code { font: 11.5px/1.4 ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
+    .mbar button, .chip, .tab, .sw, .seg button, .btn { touch-action: manipulation; }
   }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -119,8 +154,8 @@
 <div class="app">
   <aside id="panel">
     <div class="sheet-head">
-      <button class="toggle" id="sheetToggle" aria-expanded="false" aria-controls="panel"><b id="sheetTitle">Boxes</b><span id="sheetSub">Tap a box to edit it</span></button>
-      <button class="btn primary" id="addM">Add</button>
+      <button class="toggle" id="sheetToggle" aria-expanded="false" aria-controls="panel"><b id="sheetTitle">Boxes</b><span id="sheetSub">Tap one to select it</span></button>
+      <button class="btn" id="addM">Close</button>
     </div>
     <h1>Modular Boxes Studio</h1>
     <p class="by">by Amilcar Mercado</p>
@@ -168,6 +203,21 @@
       <div class="seg" role="group" aria-label="Scene"><button id="mDesk" aria-pressed="true">Desk</button><button id="mWall" aria-pressed="false">Wall</button></div>
       <div class="brand"><b>Modular Boxes</b><span>by Amilcar Mercado</span></div>
       <button class="btn" id="mFit">Fit view</button>
+    </div>
+    <div class="mbar" id="mbar" data-mode="idle">
+      <div class="mb-idle">
+        <button class="btn" id="mList">Boxes (<span id="mCount">0</span>)</button>
+        <button class="btn primary" id="mAdd">+ Add a box</button>
+      </div>
+      <div class="mb-add">
+        <div class="mb-hint" id="mHint">Pick a kind, then tap the desk, the wall or a side of a box</div>
+        <div class="mb-row"><div class="chips" id="addKinds"></div><button class="btn" id="mAddCancel">Cancel</button></div>
+      </div>
+      <div class="mb-edit">
+        <div class="mb-head" id="mHead"></div>
+        <div class="tabs" id="mTabs" role="group" aria-label="Edit"></div>
+        <div id="mBody"></div>
+      </div>
     </div>
     <div class="legend">drag a box to move it &middot; click a side to add one &middot; drag empty space to orbit &middot; scroll to zoom &middot; right-drag to pan</div>
   </main>
@@ -1023,8 +1073,9 @@ function renderItems() {
   itemsEl.innerHTML = '';
   $('#count').textContent = state.items.length ? `(${state.items.length})` : '';
   const selIt = state.items.find(o => o.id === state.sel);
-  $('#sheetTitle').textContent = selIt ? `${isCubby(selIt) ? 'Cubby' : SHORT[selIt.kind]} ${selIt.nx}\u00d7${selIt.ny}\u00d7${selIt.h}` : `${state.items.length} boxes`;
-  $('#sheetSub').textContent = selIt ? 'Tap here to edit it, or tap it again in the view to add one beside it' : 'Tap a box to edit it; drag one to move it';
+  $('#sheetTitle').textContent = `${state.items.length} boxes`;
+  $('#sheetSub').textContent = 'Tap one to select it';
+  phoneUI();
   state.items.forEach((it, idx) => {
     const open = it.id === state.sel;
     const card = el('div', { class: 'item' + (open ? ' sel' : ''), 'data-id': it.id });
@@ -1035,7 +1086,7 @@ function renderItems() {
       el('span', { class: 'dot', style: `background:${it.color}` }),
       el('span', { class: 'name' }, isCubby(it) ? 'Cubby' : SHORT[it.kind]),
       el('span', { class: 'meta' }, `${it.nx}\u00d7${it.ny}\u00d7${it.h}${it.tex !== 'none' ? ' \u00b7 ' + TEX_NAMES[it.tex] : ''}`));
-    sum.addEventListener('click', () => setSel(open ? null : it.id, false));
+    sum.addEventListener('click', () => { if (isPhone()) { setSel(it.id, false); sheet(false); } else setSel(open ? null : it.id, false); });
     const dup = el('button', { class: 'icon', title: 'Duplicate', 'aria-label': 'Duplicate', html: ICON_COPY,
       onclick: () => { const c = Object.assign({}, it, { id: Math.random().toString(36).slice(2, 8), x: it.x + it.nx }); state.items.splice(idx + 1, 0, c); state.sel = c.id; renderItems(); rebuildNow(); setSel(c.id, true); } });
     const del = el('button', { class: 'icon', title: 'Remove', 'aria-label': 'Remove', html: ICON_DEL, onclick: () => removeItem(it.id) });
@@ -1117,7 +1168,10 @@ $('#mDesk').onclick = () => setScene('desk');
 $('#mWall').onclick = () => setScene('wall');
 $('#mFit').onclick = () => fitView(true);
 $('#sheetToggle').onclick = () => sheet(!$('#panel').classList.contains('open'));
-$('#addM').onclick = () => { $('#add').click(); sheet(true); };
+$('#addM').onclick = () => sheet(false);
+$('#mList').onclick = () => sheet(true);
+$('#mAdd').onclick = () => { addMode = addMode || 'bin'; setSel(null); phoneUI(); };
+$('#mAddCancel').onclick = () => { addMode = null; phoneUI(); };
 $('#add').onclick = () => { const spot = freeSpot(1);
   if (state.scene === 'wall') { const z0 = RAIL0_TOP; for (const wz of [z0, z0 + 175, z0 + 350]) { const x = [...Array(14).keys()].find(x => !lastPlaced.some(p => p.x < (x + 1) * U && p.x + p.W > x * U && p.z < wz && p.z + p.H > wz - 50)); if (x !== undefined) { spot.x = x; spot.wz = wz; break; } } } const nb = { id: Math.random().toString(36).slice(2, 8), kind: 'bin', nx: 1, ny: 1, h: 50, tex: 'none', color: '#ecebe4', finish: 'basic', orient: 'up', x: spot.x, row: spot.row, level: 0, rail: spot.rail, wz: spot.wz, mount: true, open: 0 }; state.items.push(nb); state.sel = nb.id; renderItems(); rebuildNow(); setSel(nb.id, true); };
 function removeItem(id) { state.items = state.items.filter(o => o.id !== id); if (state.sel === id) state.sel = null; renderItems(); rebuildNow(); }
@@ -1175,9 +1229,9 @@ function pick(ev, skip = null) {
   return { empty: true, col: Math.floor(q.x / U), wz };
 }
 
-function candidateFor(h) {
+function candidateFor(h, override = null) {
   const wall = state.scene === 'wall';
-  const base = h.empty ? { kind: 'bin', nx: 1, ny: 1, h: 50, tex: 'none', color: '#ecebe4', finish: 'basic', orient: 'up' }
+  const base = override ? override : h.empty ? { kind: 'bin', nx: 1, ny: 1, h: 50, tex: 'none', color: '#ecebe4', finish: 'basic', orient: 'up' }
     : (({ kind, nx, ny, h, tex, color, finish, orient }) => ({ kind, nx, ny, h, tex, color, finish, orient }))(h.p.it);
   const c = Object.assign({ id: Math.random().toString(36).slice(2, 8), open: 0, level: 0, row: 0, rail: null }, base);
   if (h.empty) { c.x = h.col; if (wall) { c.wz = h.wz; c.mount = true; } else c.row = h.row; return c; }
@@ -1187,7 +1241,7 @@ function candidateFor(h) {
   switch (h.side) {
     case 'left': c.x = it.x - c.nx; break;
     case 'right': c.x = it.x + it.nx; break;
-    case 'top': return onTop(h, c);
+    case 'top': return onTop(h, c, override);
     case 'bottom': return null;
     case 'back': c.row = (it.row || 0) + Math.ceil(dims(it).D / U - 1e-6); break;
     case 'front': c.row = (it.row || 0) - Math.ceil(dims(c).D / U - 1e-6); if (c.row < 0) return null; break;
@@ -1213,7 +1267,7 @@ function wallSpot(h, t, o, box) {
 // the box you last added or selected, a copy of whatever already sits on this
 // top (nearest first, e.g. the cubby next to the spot), a copy of the box you
 // are pointing at, and a plain 1x1 bin; the first that fits is offered.
-function onTop(h, c0) {
+function onTop(h, c0, override = null) {
   const it = h.p.it, sel = state.items.find(o => o.id === state.sel);
   const dI = dims(it);
   const fp = (o) => { const d = dims(o); return [o.x * U, (o.row || 0) * U, o.x * U + d.W, (o.row || 0) * U + d.D]; };
@@ -1223,10 +1277,13 @@ function onTop(h, c0) {
       return Math.hypot((da[0] + da[2]) / 2 - h.pt.x, (da[1] + da[3]) / 2 - h.pt.y) - Math.hypot((db[0] + db[2]) / 2 - h.pt.x, (db[1] + db[3]) / 2 - h.pt.y); });
   const pickOf = ({ kind, nx, ny, h, tex, color, finish, orient }) => ({ kind, nx, ny, h, tex, color, finish, orient });
   const sources = [];
-  if (sel && sel !== it) sources.push(pickOf(sel));
-  for (const o of onIt) sources.push(pickOf(o));
-  sources.push(pickOf(it));
-  sources.push({ kind: 'bin', nx: 1, ny: 1, h: 50, tex: it.tex, color: it.color, finish: it.finish, orient: 'up' });
+  if (override) sources.push(override);                 // adding a chosen kind: only that
+  else {
+    if (sel && sel !== it) sources.push(pickOf(sel));
+    for (const o of onIt) sources.push(pickOf(o));
+    sources.push(pickOf(it));
+    sources.push({ kind: 'bin', nx: 1, ny: 1, h: 50, tex: it.tex, color: it.color, finish: it.finish, orient: 'up' });
+  }
   for (const src of sources) {
     const c = Object.assign({}, c0, src);
     const dC = dims(c), cols = Math.round(dC.W / U), rows = Math.ceil(dC.D / U - 1e-6);
@@ -1250,6 +1307,112 @@ function placeOf(c) {                                   // where it would go, or
 }
 
 const isPhone = () => matchMedia('(max-width: 760px)').matches;
+
+// --------------------------------------------------------- phones: the bottom bar
+// It is the only thing that covers the view, and it stays short: browse/add
+// when nothing is selected, a kind picker while adding, and a compact editor
+// for the selected box (chips and +/- steppers; no select menus, which open
+// a full-screen wheel on iOS). The full list opens only when asked for.
+let addMode = null, mTab = 'type', hintTimer = null;
+const ADD_KINDS = [['bin', 'Bin', { kind: 'bin', nx: 1, ny: 1, h: 50, orient: 'up' }], ['scoop', 'Scoop', { kind: 'scoop', nx: 2, ny: 1, h: 50 }],
+  ['cubby', 'Cubby', { kind: 'bin', nx: 1, ny: 1, h: 75, orient: 'cubby' }], ['push', 'Push drawer', { kind: 'push', nx: 2, ny: 2, h: 50 }],
+  ['drawer', 'Click drawer', { kind: 'drawer', nx: 2, ny: 2, h: 50 }], ['lid', 'Lidded box', { kind: 'lid', nx: 2, ny: 1, h: 50 }]];
+const ICON_X = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+let lastColor = '#ecebe4';
+function chip(label, pressed, onclick, extra = {}) { return el('button', Object.assign({ class: 'chip', 'aria-pressed': String(!!pressed), onclick }, extra), label); }
+function phoneUI() {
+  if (!isPhone()) return;
+  const sel = state.items.find(o => o.id === state.sel);
+  if (sel) lastColor = sel.color;
+  const mode = addMode ? 'add' : sel ? 'edit' : 'idle';
+  $('#mbar').dataset.mode = mode;
+  $('#mCount').textContent = state.items.length;
+  if (mode === 'add') {
+    const row = $('#addKinds'); row.innerHTML = '';
+    for (const [k, l] of ADD_KINDS) row.append(chip(l, addMode === k, () => { addMode = k; phoneUI(); }));
+  }
+  if (mode === 'edit') renderInspector(sel);
+}
+function hint(msg) {
+  const h = $('#mHint'); h.textContent = msg; clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => { h.textContent = 'Pick a kind, then tap the desk, the wall or a side of a box'; }, 1800);
+}
+function placeNew(h) {                                    // add mode: one tap puts the chosen kind there
+  const spec = ADD_KINDS.find(k => k[0] === addMode)[2];
+  const base = Object.assign({ tex: 'none', color: lastColor, finish: 'basic', orient: 'up' }, spec);
+  const c = h ? candidateFor(h, base) : null;
+  if (!c || !placeOf(c)) { hint(h ? 'No room there. Try an empty spot or a free side.' : 'Tap the desk, the wall or a box.'); return; }
+  state.items.push(c); addMode = null; state.sel = c.id;
+  renderItems(); rebuildNow(); setSel(c.id, false);
+}
+function duplicate(it) {
+  const c = Object.assign({}, it, { id: Math.random().toString(36).slice(2, 8), x: it.x + it.nx });
+  state.items.splice(state.items.indexOf(it) + 1, 0, c); state.sel = c.id; renderItems(); rebuildNow(); setSel(c.id, false);
+}
+function renderInspector(it) {
+  const head = $('#mHead'), tabs = $('#mTabs'), body = $('#mBody');
+  head.innerHTML = ''; tabs.innerHTML = ''; body.innerHTML = '';
+  const apply = (fn) => { fn(); fixSize(it); renderItems(); rebuildNow(); };
+  head.append(el('span', { class: 'dot', style: `background:${it.color}` }),
+    el('div', { class: 'mb-name' }, el('b', {}, isCubby(it) ? 'Cubby' : SHORT[it.kind]),
+      el('span', {}, `${it.nx * 50} \u00d7 ${it.ny * 50} \u00d7 ${it.h} mm${it.tex !== 'none' ? ' \u00b7 ' + TEX_NAMES[it.tex] : ''}`)),
+    el('button', { class: 'icon', title: 'Duplicate', 'aria-label': 'Duplicate', html: ICON_COPY, onclick: () => duplicate(it) }),
+    el('button', { class: 'icon', title: 'Remove', 'aria-label': 'Remove', html: ICON_DEL, onclick: () => removeItem(it.id) }),
+    el('button', { class: 'icon', title: 'Done', 'aria-label': 'Done', html: ICON_X, onclick: () => setSel(null) }));
+  const T = [['type', 'Type'], ['size', 'Size'], ['colour', 'Colour'], ['tex', 'Texture']];
+  if (it.kind === 'lid' || it.kind === 'push' || it.kind === 'drawer') T.push(['open', 'Open']);
+  T.push(['file', 'File']);
+  if (!T.some(t => t[0] === mTab)) mTab = 'type';
+  for (const [k, l] of T) tabs.append(el('button', { class: 'tab', 'aria-pressed': String(mTab === k), onclick: () => { mTab = k; renderInspector(it); } }, l));
+  if (mTab === 'size') {
+    const o = sizeOptions(it.kind), grid = el('div', { class: 'steps' });
+    const step = (label, list, key, fmt) => {
+      const i = list.indexOf(it[key]);
+      return el('div', { class: 'step' }, el('span', { class: 'small' }, label),
+        el('button', { class: 'chip', 'aria-label': `Less ${label}`, onclick: () => { if (i > 0) apply(() => { it[key] = list[i - 1]; }); } }, '\u2212'),
+        el('b', { class: 'v' }, fmt(it[key])),
+        el('button', { class: 'chip', 'aria-label': `More ${label}`, onclick: () => { if (i < list.length - 1) apply(() => { it[key] = list[i + 1]; }); } }, '+'));
+    };
+    grid.append(step('Wide', o.nx, 'nx', v => v * 50), step('Deep', o.ny, 'ny', v => v * 50), step('Tall', o.h, 'h', v => v));
+    body.append(grid);
+    return;
+  }
+  const row = el('div', { class: 'chips' });
+  if (mTab === 'type') {
+    for (const [k, l] of Object.entries(SHORT)) row.append(chip(l, it.kind === k && !isCubby(it), () => apply(() => { it.kind = k; it.orient = 'up'; if (k === 'lid' || k === 'push' || k === 'drawer') it.open = 0; })));
+    row.append(chip('Cubby', isCubby(it), () => apply(() => { it.kind = 'bin'; it.orient = 'cubby'; })));
+  } else if (mTab === 'colour') {
+    for (const [name, hex] of PALETTE) row.append(el('button', { class: 'sw', title: name, 'aria-label': name, style: `background:${hex}`, 'aria-pressed': String(it.color.toLowerCase() === hex), onclick: () => apply(() => { it.color = hex; }) }));
+    row.append(chip('Basic', it.finish !== 'matte', () => apply(() => { it.finish = 'basic'; })), chip('Matte', it.finish === 'matte', () => apply(() => { it.finish = 'matte'; })));
+  } else if (mTab === 'tex') {
+    for (const [k, l] of Object.entries(TEX_NAMES)) if (k !== 'flute') row.append(chip(l, it.tex === k, () => apply(() => { it.tex = k; })));
+  } else if (mTab === 'open') {
+    const max = it.kind === 'lid' ? 99 : Math.floor(drawerTravel(it));
+    const r = el('input', { type: 'range', min: 0, max, value: Math.min(it.open || 0, max), 'aria-label': it.kind === 'lid' ? 'Lid open' : 'Drawer open' });
+    r.addEventListener('input', () => { it.open = +r.value; scheduleRebuild(); });
+    row.append(el('span', { class: 'small' }, it.kind === 'lid' ? 'Closed' : 'In'), r, el('span', { class: 'small' }, it.kind === 'lid' ? 'Open' : 'Out'));
+  } else if (mTab === 'file') {
+    const [what, where] = fileNote(it);
+    row.style.flexWrap = 'wrap';
+    row.append(el('span', { class: 'small file' }, `${what}: `, el('code', {}, where)));
+  }
+  body.append(row);
+}
+// lift the scene above whatever covers the bottom of the screen, so the box you work on stays in view
+let viewLift = 0;
+function updateViewLift() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  let target = 0;
+  if (isPhone()) {
+    target = $('#mbar').offsetHeight + 16;
+    if ($('#panel').classList.contains('open')) target = Math.max(target, $('#panel').getBoundingClientRect().height);
+    target = Math.min(target, h * 0.5);
+  }
+  viewLift += (target - viewLift) * 0.25;
+  if (Math.abs(target - viewLift) < 0.5) viewLift = target;
+  if (viewLift > 0.5) camera.setViewOffset(w, h, 0, viewLift / 2, w, h);
+  else if (camera.view && camera.view.enabled) camera.clearViewOffset();
+}
 function sheet(open) { const a = $('#panel'); a.classList.toggle('open', open); $('#sheetToggle').setAttribute('aria-expanded', String(open)); }
 function setSel(id, scroll, openSheet) {
   const changed = state.sel !== id;
@@ -1257,6 +1420,7 @@ function setSel(id, scroll, openSheet) {
   flashUntil = performance.now() + 1400;
   if (openSheet && id && isPhone()) sheet(true);
   if (changed) renderItems();                           // the selected box's row opens; the others close
+  phoneUI();
   const card = id ? itemsEl.querySelector(`.item[data-id="${id}"]`) : null;
   if (card && scroll) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   updateSelBox();
@@ -1420,7 +1584,11 @@ canvas.addEventListener('pointerup', (ev) => {
   const moved = Math.hypot(ev.clientX - downAt[0], ev.clientY - downAt[1]); downAt = null;
   if (moved > (ev.pointerType === 'mouse' ? 5 : 10)) return;   // that was an orbit, not a click
   const h = pick(ev);
-  if (ev.pointerType !== 'mouse' && h && h.p && h.p.it.id !== state.sel) { setSel(h.p.it.id, true, true); return; }   // touch: first tap picks the box
+  if (addMode) { placeNew(h); return; }                 // adding: this tap says where
+  if (ev.pointerType !== 'mouse') {                     // touch: tap picks a box; tapping empty space only lets go of it
+    if (!h || h.empty) { setSel(null); return; }
+    if (h.p.it.id !== state.sel) { setSel(h.p.it.id, false); return; }
+  }
   if (!h) { setSel(null); return; }
   if (ev.shiftKey || ev.altKey) { if (h.p) setSel(h.p.it.id, true); return; }
   const c = candidateFor(h);
@@ -1462,7 +1630,7 @@ new ResizeObserver(resize).observe(canvas.parentElement);
 setScene(state.scene || 'desk');
 window.__studio = { scene, renderer, sun, camera, controls, get state() { return state; }, set state(v) { state = v; }, rebuild, rebuildBoxes, rebuildRoom, fitView, setScene, renderItems, composer, gtao, built, pick: (x, y) => pick({ clientX: x, clientY: y }), ghost, candidateFor, placeOf, layout };
 function tick() {
-  resize(); controls.update();
+  resize(); updateViewLift(); controls.update();
   if (dragEv && drag) { const ev = dragEv; dragEv = null; applyDrag(dragTarget(pick(ev, drag.ids))); }
   else if (hoverEv) updateHover();
   updateSelBox(); composer.render(); requestAnimationFrame(tick);
