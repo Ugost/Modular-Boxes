@@ -254,12 +254,55 @@ const TEX = {
 const TEX_NAMES = { none: 'Plain', wave: 'Wave', dimple: 'Dimple', weave: 'Weave', wind: 'Wind', flute: 'Flute' };
 const KINDS = { bin: 'Open bin', scoop: 'Scoop bin', push: 'Push-to-open drawer', drawer: 'Click drawer', lid: 'Lidded box' };
 // PLA Basic-ish colours
-const PALETTE = [
-  ['Jade white', '#ecebe4'], ['Beige', '#e4d6b4'], ['Light grey', '#bcbfc3'], ['Grey', '#8a8e92'], ['Dark grey', '#4a4c4e'], ['Black', '#1f2022'],
-  ['Sage', '#9fb8a0'], ['Bambu green', '#1f9a7a'], ['Mistletoe', '#3f6b4a'], ['Turquoise', '#2db0a5'], ['Cyan', '#3fb8d8'], ['Blue', '#2f63b5'],
-  ['Indigo', '#3b3f8e'], ['Purple', '#6b3fa0'], ['Magenta', '#b72466'], ['Hot pink', '#e24c8f'], ['Sakura', '#f0b8c8'], ['Red', '#d7352f'],
-  ['Pumpkin', '#e8742a'], ['Sunflower', '#f2c230'], ['Clay', '#c58a72'], ['Cocoa', '#6e4a3a'], ['Bronze', '#9a7045'], ['Silver', '#b7b9bb'],
+// The filament on hand (Bambu Handy filament library). Each swatch is one
+// spool; its finish decides how it renders: basic (satin), matte,
+// translucent, cf (carbon fibre), glossy (TPU), silk (the silver PCTG).
+const FILAMENTS = [
+  { id: 'pla-tough-white',   name: 'PLA Tough+ White',          hex: '#f3f2ee', finish: 'basic' },
+  { id: 'pla-tough-black',   name: 'PLA Tough+ Black',          hex: '#1c1c1d', finish: 'basic' },
+  { id: 'pla-tough-cyan',    name: 'PLA Tough+ Cyan',           hex: '#0a8fd4', finish: 'basic' },
+  { id: 'pla-basic-blue',    name: 'PLA Basic Blue',            hex: '#0a2989', finish: 'basic' },
+  { id: 'pla-matte-scarlet', name: 'PLA Matte Scarlet Red',     hex: '#de4343', finish: 'matte' },
+  { id: 'pla-pure-black',    name: 'PLA Pure Absolute Black',   hex: '#141415', finish: 'basic' },
+  { id: 'pla-cf-black',      name: 'PLA-CF Black',              hex: '#2b2b2c', finish: 'cf' },
+  { id: 'petg-matte-white',  name: 'PETG Matte White',          hex: '#efeee9', finish: 'matte' },
+  { id: 'petg-matte-black',  name: 'PETG Matte Black',          hex: '#202021', finish: 'matte' },
+  { id: 'petg-matte-baby',   name: 'PETG Matte Baby Blue',      hex: '#aedcf0', finish: 'matte' },
+  { id: 'petg-tl-teal',      name: 'PETG Translucent Teal',     hex: '#5cc8b8', finish: 'translucent' },
+  { id: 'petg-tl-olive',     name: 'PETG Translucent Olive',    hex: '#8a9a5b', finish: 'translucent' },
+  { id: 'petg-tl-orange',    name: 'PETG Translucent Orange',   hex: '#f39a3c', finish: 'translucent' },
+  { id: 'petg-tl-lightblue', name: 'PETG Translucent Light Blue', hex: '#6fb2f0', finish: 'translucent' },
+  { id: 'petg-cf-black',     name: 'PETG-CF Black (Sunlu)',     hex: '#2e2f30', finish: 'cf' },
+  { id: 'pctg-ash',          name: 'PCTG Ash Grey (CHCKX Silver)', hex: '#8f918e', finish: 'silk' },
+  { id: 'abs-white',         name: 'ABS White',                 hex: '#f5f5f3', finish: 'basic' },
+  { id: 'abs-black',         name: 'ABS Black',                 hex: '#1e1e1f', finish: 'basic' },
+  { id: 'tpu-red',           name: 'TPU 95A HF Red',            hex: '#c8102e', finish: 'glossy' },
+  { id: 'tpu-black',         name: 'TPU Black',                 hex: '#18181a', finish: 'glossy' },
 ];
+const FIL = Object.fromEntries(FILAMENTS.map(f => [f.id, f]));
+const DEF_FIL = 'pla-tough-white';
+function swatchStyle(f) {                               // how the spool reads as a dot
+  if (f.finish === 'translucent') return `background:repeating-conic-gradient(${f.hex} 0 25%, ${f.hex}88 0 50%) 0 0/8px 8px`;
+  if (f.finish === 'cf') return `background:repeating-linear-gradient(35deg, ${f.hex} 0 2px, #3d3e40 2px 3px)`;
+  if (f.finish === 'silk') return `background:linear-gradient(135deg, #cfd1ce, ${f.hex} 55%, #626461)`;
+  return `background:${f.hex}`;
+}
+function setFil(it, id) { const f = FIL[id]; it.fil = f.id; it.color = f.hex; it.finish = f.finish; }
+// boxes saved before (or copied from one) keep or find their spool
+function normFil(it) {
+  const f = FIL[it.fil], hex = (it.color || '').toLowerCase();
+  if (f && f.hex === hex && f.finish === it.finish) return;
+  let best = FILAMENTS.find(x => x.hex === hex && x.finish === it.finish) || FILAMENTS.find(x => x.hex === hex);
+  if (!best) {
+    const c = new THREE.Color(it.color || '#ffffff'); let bd = Infinity;
+    for (const x of FILAMENTS) {
+      const d = new THREE.Color(x.hex), dd = (c.r - d.r) ** 2 + (c.g - d.g) ** 2 + (c.b - d.b) ** 2 + (x.finish === it.finish ? 0 : 0.01);
+      if (dd < bd) { bd = dd; best = x; }
+    }
+  }
+  setFil(it, best.id);
+}
+
 
 // --------------------------------------------------------------- outlines
 function outline(W, D, rc = RC, n = NEXP, seg = 24, rcf = rc) {
@@ -486,16 +529,34 @@ function layerLines() {
   layerTex = new THREE.CanvasTexture(c); layerTex.wrapS = layerTex.wrapT = THREE.RepeatWrapping; layerTex.anisotropy = 4;
   return layerTex;
 }
+let cfTex = null;
+function cfFibres() {                                   // short random fibres for carbon-filled filament
+  if (cfTex) return cfTex;
+  const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+  x.fillStyle = '#808080'; x.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 2600; i++) {
+    const px = Math.random() * 256, py = Math.random() * 256, a = Math.random() * Math.PI, l = 3 + Math.random() * 7;
+    x.strokeStyle = Math.random() < 0.5 ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.45)'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l); x.stroke();
+  }
+  cfTex = new THREE.CanvasTexture(c); cfTex.wrapS = cfTex.wrapT = THREE.RepeatWrapping; cfTex.repeat.set(0.3, 0.3); cfTex.anisotropy = 4;
+  return cfTex;
+}
 function plaMaterial(hex, finish) {
   const c = new THREE.Color(hex);
-  const matte = finish === 'matte';
-  return new THREE.MeshPhysicalMaterial({
-    bumpMap: layerLines(), bumpScale: matte ? 0.05 : 0.035,
-    color: c, roughness: matte ? 0.8 : 0.46, metalness: 0,
-    clearcoat: matte ? 0 : 0.28, clearcoatRoughness: 0.38,
-    specularIntensity: 0.75, envMapIntensity: 0.9,
-    side: THREE.DoubleSide, shadowSide: THREE.FrontSide,
-  });
+  const P = { bumpMap: layerLines(), color: c, metalness: 0, specularIntensity: 0.75, envMapIntensity: 0.9,
+              side: THREE.DoubleSide, shadowSide: THREE.FrontSide, clearcoatRoughness: 0.38 };
+  switch (finish) {
+    case 'matte': Object.assign(P, { bumpScale: 0.05, roughness: 0.82, clearcoat: 0 }); break;
+    case 'cf': Object.assign(P, { bumpMap: cfFibres(), bumpScale: 0.09, roughness: 0.7, clearcoat: 0, sheen: 0.5, sheenRoughness: 0.45, sheenColor: new THREE.Color(0x6a6a6a) }); break;
+    case 'translucent': Object.assign(P, { color: c.clone().lerp(new THREE.Color(0xffffff), 0.3), bumpScale: 0.025, roughness: 0.24, clearcoat: 0.4,
+                                          transmission: 0.72, thickness: 2.4, ior: 1.57, attenuationColor: c.clone(), attenuationDistance: 30,
+                                          specularIntensity: 1 }); break;
+    case 'glossy': Object.assign(P, { bumpScale: 0.03, roughness: 0.3, clearcoat: 0.5 }); break;
+    case 'silk': Object.assign(P, { bumpScale: 0.03, roughness: 0.34, metalness: 0.38, clearcoat: 0.3 }); break;
+    default: Object.assign(P, { bumpScale: 0.035, roughness: 0.46, clearcoat: 0.28 });
+  }
+  return new THREE.MeshPhysicalMaterial(P);
 }
 function darker(mat, k = 0.72) { const m = mat.clone(); m.color = mat.color.clone().multiplyScalar(k); return m; }
 function strip(x0, y0, z0, x1, y1, z1, mat) {
@@ -717,18 +778,18 @@ let state = loadState() || preset('desk');
 let sceneMode = state.scene || 'desk';
 
 function preset(name) {
-  const mk = (kind, nx, ny, h, tex, color, x, extra = {}) => Object.assign({ id: Math.random().toString(36).slice(2, 8), kind, nx, ny, h, tex, color, finish: 'basic', x, row: 0, level: 0, rail: null, open: 0 }, extra);
+  const mk = (kind, nx, ny, h, tex, fil, x, extra = {}) => Object.assign({ id: Math.random().toString(36).slice(2, 8), kind, nx, ny, h, tex, fil, color: FIL[fil].hex, finish: FIL[fil].finish, x, row: 0, level: 0, rail: null, open: 0 }, extra);
   if (name === 'desk') return { scene: 'desk', desk: 'oak', wall: '#e9e5dc', items: [
-    mk('push', 2, 2, 50, 'wave', '#9fb8a0', 0), mk('push', 2, 2, 50, 'wave', '#9fb8a0', 0, { level: 1, open: 14 }),
-    mk('scoop', 2, 1, 50, 'none', '#c58a72', 0, { row: 0, level: 2 }),
-    mk('bin', 1, 1, 50, 'none', '#ecebe4', 2), mk('bin', 1, 1, 100, 'wind', '#9fb8a0', 2, { row: 1 }),
-    mk('lid', 2, 1, 50, 'dimple', '#c58a72', 3, { open: 62 }), mk('bin', 2, 1, 75, 'weave', '#ecebe4', 3, { row: 1 }),
-    mk('bin', 3, 1, 25, 'none', '#9fb8a0', 5), mk('bin', 1, 1, 50, 'none', '#c58a72', 5, { row: 1 }),
-    mk('bin', 2, 2, 75, 'wave', '#ecebe4', 8, { orient: 'cubby' }), mk('bin', 2, 2, 75, 'wave', '#ecebe4', 8, { orient: 'cubby', level: 1 }),
+    mk('push', 2, 2, 50, 'wave', 'petg-matte-baby', 0), mk('push', 2, 2, 50, 'wave', 'petg-matte-baby', 0, { level: 1, open: 14 }),
+    mk('scoop', 2, 1, 50, 'none', 'pla-matte-scarlet', 0, { row: 0, level: 2 }),
+    mk('bin', 1, 1, 50, 'none', 'pla-tough-white', 2), mk('bin', 1, 1, 100, 'wind', 'petg-tl-teal', 2, { row: 1 }),
+    mk('lid', 2, 1, 50, 'dimple', 'petg-tl-orange', 3, { open: 62 }), mk('bin', 2, 1, 75, 'weave', 'petg-matte-white', 3, { row: 1 }),
+    mk('bin', 3, 1, 25, 'none', 'pla-tough-cyan', 5), mk('bin', 1, 1, 50, 'none', 'pla-matte-scarlet', 5, { row: 1 }),
+    mk('bin', 2, 2, 75, 'wave', 'petg-matte-white', 8, { orient: 'cubby' }), mk('bin', 2, 2, 75, 'wave', 'pctg-ash', 8, { orient: 'cubby', level: 1 }),
   ] };
   if (name === 'wall') return { scene: 'wall', desk: 'oak', wall: '#e9e5dc', items: [
-    mk('bin', 2, 1, 75, 'weave', '#ecebe4', 0, { rail: 1 }), mk('bin', 1, 1, 50, 'dimple', '#9fb8a0', 2, { rail: 1 }), mk('scoop', 1, 1, 100, 'none', '#c58a72', 4, { rail: 1 }),
-    mk('lid', 2, 2, 50, 'wave', '#9fb8a0', 0, { rail: 0, open: 0 }), mk('push', 2, 2, 50, 'none', '#ecebe4', 3, { rail: 0 }),
+    mk('bin', 2, 1, 75, 'weave', 'petg-matte-white', 0, { rail: 1 }), mk('bin', 1, 1, 50, 'dimple', 'petg-matte-baby', 2, { rail: 1 }), mk('scoop', 1, 1, 100, 'none', 'pla-matte-scarlet', 4, { rail: 1 }),
+    mk('lid', 2, 2, 50, 'wave', 'petg-tl-teal', 0, { rail: 0, open: 0 }), mk('push', 2, 2, 50, 'none', 'pla-cf-black', 3, { rail: 0 }),
   ] };
   return { scene: 'desk', desk: 'oak', wall: '#e9e5dc', items: [] };
 }
@@ -819,6 +880,7 @@ function disposeGroup(g) { g.traverse(m => { if (m.geometry) m.geometry.dispose(
 function clearBuilt() { for (const rec of built.values()) { world.remove(rec.group); disposeGroup(rec.group); } built.clear(); }
 
 function rebuildBoxes() {
+  state.items.forEach(normFil);
   const placed = layout();
   const seen = new Set();
   const box = new THREE.Box3();
@@ -1070,6 +1132,7 @@ let posOpen = false;
 const SHORT = { bin: 'Open bin', scoop: 'Scoop bin', push: 'Push drawer', drawer: 'Click drawer', lid: 'Lidded box' };
 // The list: one line per box; only the box being edited opens up.
 function renderItems() {
+  state.items.forEach(normFil);
   itemsEl.innerHTML = '';
   $('#count').textContent = state.items.length ? `(${state.items.length})` : '';
   const selIt = state.items.find(o => o.id === state.sel);
@@ -1083,7 +1146,7 @@ function renderItems() {
     card.addEventListener('pointerleave', () => { if (cardHover === it.id) cardHover = null; });
     const ch = (fn) => (v) => { fn(v); fixSize(it); renderItems(); rebuildNow(); };
     const sum = el('button', { class: 'sum', 'aria-expanded': String(open), title: open ? 'Close' : 'Edit this box' },
-      el('span', { class: 'dot', style: `background:${it.color}` }),
+      el('span', { class: 'dot', style: swatchStyle(FIL[it.fil]) }),
       el('span', { class: 'name' }, isCubby(it) ? 'Cubby' : SHORT[it.kind]),
       el('span', { class: 'meta' }, `${it.nx}\u00d7${it.ny}\u00d7${it.h}${it.tex !== 'none' ? ' \u00b7 ' + TEX_NAMES[it.tex] : ''}`));
     sum.addEventListener('click', () => { if (isPhone()) { setSel(it.id, false); sheet(false); } else setSel(open ? null : it.id, false); });
@@ -1106,13 +1169,9 @@ function renderItems() {
         if (isCubby(it)) body.append(el('p', { class: 'hint' }, `Stands ${it.ny * 50} mm tall and ${it.h} mm deep ("Deep" sets its height, "Tall" how far back it goes).`));
       }
       const sw = el('div', { class: 'swatches' });
-      for (const [name, hex] of PALETTE) sw.append(el('button', { class: 'sw', title: name, 'aria-label': name, style: `background:${hex}`, 'aria-pressed': String(it.color.toLowerCase() === hex), onclick: () => { it.color = hex; renderItems(); rebuildNow(); } }));
-      const custom = el('input', { type: 'color', id: `col-${it.id}`, value: it.color, title: 'Custom colour' });
-      custom.addEventListener('input', () => { it.color = custom.value; scheduleRebuild(); });
-      custom.addEventListener('change', () => renderItems());
-      sw.append(custom);
-      body.append(el('div', { class: 'sec' }, el('div', { class: 'row', style: 'justify-content:space-between' }, el('span', { class: 'small' }, 'Colour'),
-        select(`fin-${it.id}`, [['basic', 'PLA Basic'], ['matte', 'PLA Matte']], it.finish, ch(v => it.finish = v))), sw));
+      for (const f of FILAMENTS) sw.append(el('button', { class: 'sw', title: f.name, 'aria-label': f.name, style: swatchStyle(f), 'aria-pressed': String(it.fil === f.id), onclick: () => { setFil(it, f.id); renderItems(); rebuildNow(); } }));
+      body.append(el('div', { class: 'sec' }, el('div', { class: 'row', style: 'justify-content:space-between' }, el('span', { class: 'small' }, 'Filament'),
+        el('span', { class: 'small', style: 'color:var(--fg)' }, FIL[it.fil].name)), sw));
       if (it.kind === 'lid' || it.kind === 'push' || it.kind === 'drawer') {
         const max = it.kind === 'lid' ? 99 : Math.floor(drawerTravel(it));
         const r = el('input', { type: 'range', id: `open-${it.id}`, min: 0, max, value: Math.min(it.open || 0, max) });
@@ -1173,7 +1232,7 @@ $('#mList').onclick = () => sheet(true);
 $('#mAdd').onclick = () => { addMode = addMode || 'bin'; setSel(null); phoneUI(); };
 $('#mAddCancel').onclick = () => { addMode = null; phoneUI(); };
 $('#add').onclick = () => { const spot = freeSpot(1);
-  if (state.scene === 'wall') { const z0 = RAIL0_TOP; for (const wz of [z0, z0 + 175, z0 + 350]) { const x = [...Array(14).keys()].find(x => !lastPlaced.some(p => p.x < (x + 1) * U && p.x + p.W > x * U && p.z < wz && p.z + p.H > wz - 50)); if (x !== undefined) { spot.x = x; spot.wz = wz; break; } } } const nb = { id: Math.random().toString(36).slice(2, 8), kind: 'bin', nx: 1, ny: 1, h: 50, tex: 'none', color: '#ecebe4', finish: 'basic', orient: 'up', x: spot.x, row: spot.row, level: 0, rail: spot.rail, wz: spot.wz, mount: true, open: 0 }; state.items.push(nb); state.sel = nb.id; renderItems(); rebuildNow(); setSel(nb.id, true); };
+  if (state.scene === 'wall') { const z0 = RAIL0_TOP; for (const wz of [z0, z0 + 175, z0 + 350]) { const x = [...Array(14).keys()].find(x => !lastPlaced.some(p => p.x < (x + 1) * U && p.x + p.W > x * U && p.z < wz && p.z + p.H > wz - 50)); if (x !== undefined) { spot.x = x; spot.wz = wz; break; } } } const nb = { id: Math.random().toString(36).slice(2, 8), kind: 'bin', nx: 1, ny: 1, h: 50, tex: 'none', color: FIL[DEF_FIL].hex, finish: FIL[DEF_FIL].finish, fil: DEF_FIL, orient: 'up', x: spot.x, row: spot.row, level: 0, rail: spot.rail, wz: spot.wz, mount: true, open: 0 }; state.items.push(nb); state.sel = nb.id; renderItems(); rebuildNow(); setSel(nb.id, true); };
 function removeItem(id) { state.items = state.items.filter(o => o.id !== id); if (state.sel === id) state.sel = null; renderItems(); rebuildNow(); }
 document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => { state = preset(b.dataset.preset); setScene(state.scene); $('#deskFinish').value = state.desk; $('#wallColor').value = state.wall; });
 $('#deskFinish').value = state.desk || 'oak'; $('#deskFinish').onchange = (e) => { state.desk = e.target.value; rebuildRoom(); saveState(); };
@@ -1231,7 +1290,7 @@ function pick(ev, skip = null) {
 
 function candidateFor(h, override = null) {
   const wall = state.scene === 'wall';
-  const base = override ? override : h.empty ? { kind: 'bin', nx: 1, ny: 1, h: 50, tex: 'none', color: '#ecebe4', finish: 'basic', orient: 'up' }
+  const base = override ? override : h.empty ? { kind: 'bin', nx: 1, ny: 1, h: 50, tex: 'none', color: FIL[DEF_FIL].hex, finish: FIL[DEF_FIL].finish, fil: DEF_FIL, orient: 'up' }
     : (({ kind, nx, ny, h, tex, color, finish, orient }) => ({ kind, nx, ny, h, tex, color, finish, orient }))(h.p.it);
   const c = Object.assign({ id: Math.random().toString(36).slice(2, 8), open: 0, level: 0, row: 0, rail: null }, base);
   if (h.empty) { c.x = h.col; if (wall) { c.wz = h.wz; c.mount = true; } else c.row = h.row; return c; }
@@ -1318,12 +1377,12 @@ const ADD_KINDS = [['bin', 'Bin', { kind: 'bin', nx: 1, ny: 1, h: 50, orient: 'u
   ['cubby', 'Cubby', { kind: 'bin', nx: 1, ny: 1, h: 75, orient: 'cubby' }], ['push', 'Push drawer', { kind: 'push', nx: 2, ny: 2, h: 50 }],
   ['drawer', 'Click drawer', { kind: 'drawer', nx: 2, ny: 2, h: 50 }], ['lid', 'Lidded box', { kind: 'lid', nx: 2, ny: 1, h: 50 }]];
 const ICON_X = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
-let lastColor = '#ecebe4';
+let lastFil = DEF_FIL;
 function chip(label, pressed, onclick, extra = {}) { return el('button', Object.assign({ class: 'chip', 'aria-pressed': String(!!pressed), onclick }, extra), label); }
 function phoneUI() {
   if (!isPhone()) return;
   const sel = state.items.find(o => o.id === state.sel);
-  if (sel) lastColor = sel.color;
+  if (sel && sel.fil) lastFil = sel.fil;
   const mode = addMode ? 'add' : sel ? 'edit' : 'idle';
   $('#mbar').dataset.mode = mode;
   $('#mCount').textContent = state.items.length;
@@ -1339,7 +1398,7 @@ function hint(msg) {
 }
 function placeNew(h) {                                    // add mode: one tap puts the chosen kind there
   const spec = ADD_KINDS.find(k => k[0] === addMode)[2];
-  const base = Object.assign({ tex: 'none', color: lastColor, finish: 'basic', orient: 'up' }, spec);
+  const base = Object.assign({ tex: 'none', color: FIL[lastFil].hex, finish: FIL[lastFil].finish, fil: lastFil, orient: 'up' }, spec);
   const c = h ? candidateFor(h, base) : null;
   if (!c || !placeOf(c)) { hint(h ? 'No room there. Try an empty spot or a free side.' : 'Tap the desk, the wall or a box.'); return; }
   state.items.push(c); addMode = null; state.sel = c.id;
@@ -1353,13 +1412,13 @@ function renderInspector(it) {
   const head = $('#mHead'), tabs = $('#mTabs'), body = $('#mBody');
   head.innerHTML = ''; tabs.innerHTML = ''; body.innerHTML = '';
   const apply = (fn) => { fn(); fixSize(it); renderItems(); rebuildNow(); };
-  head.append(el('span', { class: 'dot', style: `background:${it.color}` }),
+  head.append(el('span', { class: 'dot', style: swatchStyle(FIL[it.fil]) }),
     el('div', { class: 'mb-name' }, el('b', {}, isCubby(it) ? 'Cubby' : SHORT[it.kind]),
       el('span', {}, `${it.nx * 50} \u00d7 ${it.ny * 50} \u00d7 ${it.h} mm${it.tex !== 'none' ? ' \u00b7 ' + TEX_NAMES[it.tex] : ''}`)),
     el('button', { class: 'icon', title: 'Duplicate', 'aria-label': 'Duplicate', html: ICON_COPY, onclick: () => duplicate(it) }),
     el('button', { class: 'icon', title: 'Remove', 'aria-label': 'Remove', html: ICON_DEL, onclick: () => removeItem(it.id) }),
     el('button', { class: 'icon', title: 'Done', 'aria-label': 'Done', html: ICON_X, onclick: () => setSel(null) }));
-  const T = [['type', 'Type'], ['size', 'Size'], ['colour', 'Colour'], ['tex', 'Texture']];
+  const T = [['type', 'Type'], ['size', 'Size'], ['colour', 'Filament'], ['tex', 'Texture']];
   if (it.kind === 'lid' || it.kind === 'push' || it.kind === 'drawer') T.push(['open', 'Open']);
   T.push(['file', 'File']);
   if (!T.some(t => t[0] === mTab)) mTab = 'type';
@@ -1382,8 +1441,8 @@ function renderInspector(it) {
     for (const [k, l] of Object.entries(SHORT)) row.append(chip(l, it.kind === k && !isCubby(it), () => apply(() => { it.kind = k; it.orient = 'up'; if (k === 'lid' || k === 'push' || k === 'drawer') it.open = 0; })));
     row.append(chip('Cubby', isCubby(it), () => apply(() => { it.kind = 'bin'; it.orient = 'cubby'; })));
   } else if (mTab === 'colour') {
-    for (const [name, hex] of PALETTE) row.append(el('button', { class: 'sw', title: name, 'aria-label': name, style: `background:${hex}`, 'aria-pressed': String(it.color.toLowerCase() === hex), onclick: () => apply(() => { it.color = hex; }) }));
-    row.append(chip('Basic', it.finish !== 'matte', () => apply(() => { it.finish = 'basic'; })), chip('Matte', it.finish === 'matte', () => apply(() => { it.finish = 'matte'; })));
+    body.append(el('div', { class: 'small', style: 'margin:0 2px 6px;color:var(--fg)' }, FIL[it.fil].name));
+    for (const f of FILAMENTS) row.append(el('button', { class: 'sw', title: f.name, 'aria-label': f.name, style: swatchStyle(f), 'aria-pressed': String(it.fil === f.id), onclick: () => apply(() => setFil(it, f.id)) }));
   } else if (mTab === 'tex') {
     for (const [k, l] of Object.entries(TEX_NAMES)) if (k !== 'flute') row.append(chip(l, it.tex === k, () => apply(() => { it.tex = k; })));
   } else if (mTab === 'open') {
